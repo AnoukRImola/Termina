@@ -1,0 +1,25 @@
+[package]
+name = "termina-contracts"
+version = "0.1.0"
+edition = "2021"
+authors = ["Termina Team"]
+description = "Escrow infrastructure for B2B workflows on Casper"
+
+[dependencies]
+odra = { version = "1.2.0", default-features = false }
+
+[dev-dependencies]
+odra-test = "1.2.0"
+
+[features]
+default = []
+
+[[bin]]
+name = "termina_build_contract"
+path = "bin/build_contract.rs"
+test = false
+
+[[bin]]
+name = "termina_build_schema"
+path = "bin/build_schema.rs"
+test = false
