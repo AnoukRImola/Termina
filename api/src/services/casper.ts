@@ -3,18 +3,23 @@
  * Handles all interactions with the Casper network
  */
 
-import {
-  CasperClient,
-  Contracts,
-  RuntimeArgs,
-  CLValueBuilder,
-  CLPublicKey,
-  DeployUtil,
-  CLOption,
-  Keys,
-} from 'casper-js-sdk';
 import { Some, None } from 'ts-results';
 import { EscrowState, type EscrowResponse } from '../types/index.js';
+import { createRequire } from 'module';
+
+// casper-js-sdk is CJS, use require for ESM compatibility
+const require = createRequire(import.meta.url);
+const casperSdk = require('casper-js-sdk');
+
+const CasperClient = casperSdk.CasperClient as typeof import('casper-js-sdk').CasperClient;
+const Contracts = casperSdk.Contracts as typeof import('casper-js-sdk').Contracts;
+const RuntimeArgs = casperSdk.RuntimeArgs as typeof import('casper-js-sdk').RuntimeArgs;
+const CLValueBuilder = casperSdk.CLValueBuilder as typeof import('casper-js-sdk').CLValueBuilder;
+const CLPublicKey = casperSdk.CLPublicKey as typeof import('casper-js-sdk').CLPublicKey;
+const DeployUtil = casperSdk.DeployUtil as typeof import('casper-js-sdk').DeployUtil;
+const CLOption = casperSdk.CLOption;
+const CLKeyType = casperSdk.CLKeyType;
+const CLU64Type = casperSdk.CLU64Type;
 
 // Configuration
 const CASPER_NODE_URL = process.env.CASPER_NODE_URL || 'https://rpc.testnet.casperlabs.io/rpc';
@@ -28,9 +33,9 @@ const GAS_PAYMENT = {
 };
 
 export class CasperService {
-  private client: CasperClient;
+  private client: InstanceType<typeof CasperClient>;
   private networkName: string;
-  private contract: Contracts.Contract;
+  private contract: InstanceType<typeof Contracts.Contract>;
 
   constructor() {
     this.client = new CasperClient(CASPER_NODE_URL);
@@ -203,13 +208,13 @@ export class CasperService {
       'payer': CLValueBuilder.key(payerKey),
       'arbiter': params.arbiterPublicKey
         ? new CLOption(Some(CLValueBuilder.key(CLPublicKey.fromHex(params.arbiterPublicKey))))
-        : new CLOption(None, CLValueBuilder.key(senderKey).clType()),
+        : new CLOption(None, new CLKeyType()),
       'due_date': params.dueDate
         ? new CLOption(Some(CLValueBuilder.u64(params.dueDate)))
-        : new CLOption(None, CLValueBuilder.u64(0).clType()),
+        : new CLOption(None, new CLU64Type()),
     });
 
-    let deploy: DeployUtil.Deploy;
+    let deploy: ReturnType<typeof DeployUtil.makeDeploy>;
 
     if (params.contractWasm) {
       deploy = this.contract.install(

@@ -9,8 +9,10 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Card } from '@/components/ui/Card';
-import { ArrowLeft, Send, Save, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Send, Save, Plus, Trash2, AlertCircle, Wallet } from 'lucide-react';
 import Link from 'next/link';
+import { useCasper } from '@/lib/casper';
+import { useInvoices } from '@/hooks';
 
 interface LineItem {
   id: string;
@@ -43,7 +45,10 @@ const paymentTerms = [
 
 export default function NewInvoicePage() {
   const router = useRouter();
+  const { isConnected, account, connect } = useCasper();
+  const { createInvoice, isLoading, error } = useInvoices();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     client: '',
@@ -89,11 +94,60 @@ export default function NewInvoicePage() {
     }).format(amount);
   };
 
+  const calculateDueDate = () => {
+    const days = parseInt(formData.paymentTerms);
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + days);
+    return dueDate.toISOString().split('T')[0];
+  };
+
   const handleSubmit = async (asDraft: boolean) => {
+    setFormError(null);
+
+    if (!isConnected) {
+      setFormError('Please connect your wallet first');
+      return;
+    }
+
+    if (!formData.client) {
+      setFormError('Please select a client');
+      return;
+    }
+
+    if (subtotal === 0) {
+      setFormError('Please add at least one line item with a value');
+      return;
+    }
+
     setIsSubmitting(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    router.push('/invoices');
+
+    try {
+      // Get client info from selected client
+      const clientInfo = clients.find(c => c.value === formData.client);
+      const description = lineItems
+        .filter(item => item.description)
+        .map(item => `${item.description} (x${item.quantity})`)
+        .join(', ');
+
+      const invoice = await createInvoice({
+        description: description || 'Invoice services',
+        amount: subtotal,
+        payerEmail: `${formData.client}@example.com`,
+        payerName: clientInfo?.label || formData.client,
+        dueDate: calculateDueDate(),
+        notes: formData.notes,
+      });
+
+      if (invoice) {
+        router.push('/invoices');
+      } else {
+        setFormError(error || 'Failed to create invoice');
+      }
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to create invoice');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -113,6 +167,33 @@ export default function NewInvoicePage() {
 
       <div className="p-6 max-w-4xl">
         <div className="space-y-6">
+          {/* Wallet Connection Warning */}
+          {!isConnected && (
+            <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-amber-800">
+                  Wallet not connected
+                </p>
+                <p className="text-sm text-amber-600">
+                  Connect your wallet to create invoices on the Casper blockchain.
+                </p>
+              </div>
+              <Button variant="outline" onClick={() => connect()} className="flex-shrink-0">
+                <Wallet className="w-4 h-4" />
+                Connect Wallet
+              </Button>
+            </div>
+          )}
+
+          {/* Error Message */}
+          {(formError || error) && (
+            <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+              <p className="text-sm text-red-800">{formError || error}</p>
+            </div>
+          )}
+
           {/* Client & Basic Info */}
           <Card>
             <Card.Header>
@@ -308,17 +389,17 @@ export default function NewInvoicePage() {
             <Button
               variant="outline"
               onClick={() => handleSubmit(true)}
-              disabled={isSubmitting}
+              disabled={isSubmitting || isLoading}
             >
               <Save className="w-4 h-4" />
-              Save as Draft
+              {isSubmitting ? 'Saving...' : 'Save as Draft'}
             </Button>
             <Button
               onClick={() => handleSubmit(false)}
-              disabled={isSubmitting || !formData.client || subtotal === 0}
+              disabled={isSubmitting || isLoading || !isConnected || !formData.client || subtotal === 0}
             >
               <Send className="w-4 h-4" />
-              Send Invoice
+              {isSubmitting ? 'Creating...' : 'Create Invoice'}
             </Button>
           </div>
         </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { use } from 'react';
+import { use, useState } from 'react';
 import { notFound } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Header } from '@/components/layout/Header';
@@ -9,6 +9,8 @@ import { Card } from '@/components/ui/Card';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { getInvoiceById } from '@/lib/mock-data';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { useCasper } from '@/lib/casper';
+import { useInvoices } from '@/hooks';
 import {
   ArrowLeft,
   Send,
@@ -23,6 +25,10 @@ import {
   Calendar,
   DollarSign,
   RefreshCw,
+  Wallet,
+  Banknote,
+  XCircle,
+  Loader2,
 } from 'lucide-react';
 import Link from 'next/link';
 import type { InvoiceStatus } from '@/types';
@@ -69,12 +75,53 @@ function getStatusIcon(status: InvoiceStatus, currentStatus: InvoiceStatus) {
 export default function InvoiceDetailPage({ params }: PageProps) {
   const { id } = use(params);
   const invoice = getInvoiceById(id);
+  const { isConnected, account, connect } = useCasper();
+  const { acceptInvoice, fundInvoice, releaseInvoice, cancelInvoice, isLoading, error } = useInvoices();
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionInProgress, setActionInProgress] = useState<string | null>(null);
 
   if (!invoice) {
     notFound();
   }
 
   const currentOrder = statusOrder[invoice.status];
+
+  const handleAction = async (action: 'accept' | 'fund' | 'release' | 'cancel') => {
+    if (!isConnected) {
+      setActionError('Please connect your wallet first');
+      return;
+    }
+
+    setActionError(null);
+    setActionInProgress(action);
+
+    try {
+      let success = false;
+
+      switch (action) {
+        case 'accept':
+          success = await acceptInvoice(invoice.id);
+          break;
+        case 'fund':
+          success = await fundInvoice(invoice.id, invoice.amount);
+          break;
+        case 'release':
+          success = await releaseInvoice(invoice.id);
+          break;
+        case 'cancel':
+          success = await cancelInvoice(invoice.id);
+          break;
+      }
+
+      if (!success) {
+        setActionError(error || `Failed to ${action} invoice`);
+      }
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : `Failed to ${action} invoice`);
+    } finally {
+      setActionInProgress(null);
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -304,10 +351,112 @@ export default function InvoiceDetailPage({ params }: PageProps) {
               </Card.Content>
             </Card>
 
+            {/* Wallet Connection */}
+            {!isConnected && (
+              <Card>
+                <Card.Content className="pt-6">
+                  <div className="flex items-center gap-3 p-4 bg-amber-50 rounded-lg border border-amber-100">
+                    <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-amber-800">Wallet not connected</p>
+                      <p className="text-xs text-amber-600">Connect to perform escrow actions</p>
+                    </div>
+                  </div>
+                  <Button onClick={() => connect()} className="w-full mt-3">
+                    <Wallet className="w-4 h-4" />
+                    Connect Wallet
+                  </Button>
+                </Card.Content>
+              </Card>
+            )}
+
+            {/* Escrow Actions */}
+            {isConnected && invoice.status !== 'cancelled' && invoice.status !== 'completed' && (
+              <Card>
+                <Card.Header>
+                  <Card.Title>Escrow Actions</Card.Title>
+                  <Card.Description>Blockchain-secured payment actions</Card.Description>
+                </Card.Header>
+                <Card.Content className="space-y-2">
+                  {actionError && (
+                    <div className="flex items-center gap-2 p-3 bg-red-50 rounded-lg border border-red-100 mb-3">
+                      <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                      <p className="text-xs text-red-700">{actionError}</p>
+                    </div>
+                  )}
+
+                  {/* Accept - available when pending */}
+                  {invoice.status === 'pending' && (
+                    <Button
+                      onClick={() => handleAction('accept')}
+                      disabled={actionInProgress !== null}
+                      className="w-full justify-start"
+                    >
+                      {actionInProgress === 'accept' ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4" />
+                      )}
+                      Accept Invoice
+                    </Button>
+                  )}
+
+                  {/* Fund - available when accepted */}
+                  {invoice.status === 'accepted' && (
+                    <Button
+                      onClick={() => handleAction('fund')}
+                      disabled={actionInProgress !== null}
+                      className="w-full justify-start"
+                    >
+                      {actionInProgress === 'fund' ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Banknote className="w-4 h-4" />
+                      )}
+                      Fund Escrow ({formatCurrency(invoice.amount, invoice.currency)})
+                    </Button>
+                  )}
+
+                  {/* Release - available when funded */}
+                  {invoice.status === 'funded' && (
+                    <Button
+                      onClick={() => handleAction('release')}
+                      disabled={actionInProgress !== null}
+                      className="w-full justify-start"
+                    >
+                      {actionInProgress === 'release' ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Send className="w-4 h-4" />
+                      )}
+                      Release Funds to Issuer
+                    </Button>
+                  )}
+
+                  {/* Cancel - available before funded */}
+                  {(invoice.status === 'draft' || invoice.status === 'pending' || invoice.status === 'accepted') && (
+                    <Button
+                      variant="danger"
+                      onClick={() => handleAction('cancel')}
+                      disabled={actionInProgress !== null}
+                      className="w-full justify-start"
+                    >
+                      {actionInProgress === 'cancel' ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <XCircle className="w-4 h-4" />
+                      )}
+                      Cancel Invoice
+                    </Button>
+                  )}
+                </Card.Content>
+              </Card>
+            )}
+
             {/* Quick Actions */}
             <Card>
               <Card.Header>
-                <Card.Title>Actions</Card.Title>
+                <Card.Title>Other Actions</Card.Title>
               </Card.Header>
               <Card.Content className="space-y-2">
                 <Button variant="outline" className="w-full justify-start">
@@ -322,11 +471,6 @@ export default function InvoiceDetailPage({ params }: PageProps) {
                   <Button variant="outline" className="w-full justify-start">
                     <RefreshCw className="w-4 h-4" />
                     Send Reminder
-                  </Button>
-                )}
-                {invoice.status === 'draft' && (
-                  <Button variant="danger" className="w-full justify-start">
-                    Delete Invoice
                   </Button>
                 )}
               </Card.Content>

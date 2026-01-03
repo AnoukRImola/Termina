@@ -10,6 +10,7 @@
     "lint": "eslint src --ext .ts"
   },
   "dependencies": {
+    "@hono/node-server": "^1.19.7",
     "@hono/zod-validator": "^0.7.6",
     "casper-js-sdk": "^2.15.4",
     "cors": "^2.8.5",
