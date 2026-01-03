@@ -3,6 +3,8 @@
 import { createContext, useContext, useCallback, useState, useEffect, ReactNode } from 'react';
 import type { CasperContextType, CasperAccount, WalletProvider } from './types';
 
+// Demo mode for hackathon - simulates wallet without actual SDK
+const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE !== 'false';
 const CSPR_CLICK_APP_ID = 'termina-invoices';
 
 const CasperContext = createContext<CasperContextType | null>(null);
@@ -11,23 +13,44 @@ interface CasperProviderProps {
   children: ReactNode;
 }
 
+// Demo account for testing
+const DEMO_ACCOUNT: CasperAccount = {
+  publicKey: '01a2b3c4d5e6f7890123456789abcdef01a2b3c4d5e6f7890123456789abcdef01',
+  balance: '10000000000000', // 10,000 CSPR in motes
+  provider: 'demo',
+  name: 'Demo Account',
+};
+
 export function CasperProvider({ children }: CasperProviderProps) {
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [account, setAccount] = useState<CasperAccount | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [csprClick, setCsprClick] = useState<any>(null);
+  const [isDemoMode, setIsDemoMode] = useState(DEMO_MODE);
 
-  // Initialize CSPR.click on mount
+  // Initialize CSPR.click on mount (if not in demo mode)
   useEffect(() => {
-    // Skip initialization on server side
     if (typeof window === 'undefined') return;
+    if (isDemoMode) {
+      console.log('Running in demo mode - wallet simulation enabled');
+      return;
+    }
 
     const initCsprClick = async () => {
       try {
-        // Dynamic import to avoid SSR issues
-        const { CSPRClickSDK } = await import('@make-software/csprclick-core-client');
-        const { CONTENT_MODE } = await import('@make-software/csprclick-core-types');
+        // Dynamic import - wrapped to prevent build-time resolution
+        const clientModule = await import(
+          /* webpackIgnore: true */
+          '@make-software/csprclick-core-client'
+        );
+        const typesModule = await import(
+          /* webpackIgnore: true */
+          '@make-software/csprclick-core-types'
+        );
+
+        const { CSPRClickSDK } = clientModule;
+        const { CONTENT_MODE } = typesModule;
 
         const client = new CSPRClickSDK();
         client.init({
@@ -37,7 +60,6 @@ export function CasperProvider({ children }: CasperProviderProps) {
           providers: ['casper-wallet', 'ledger', 'casperdash'],
         });
 
-        // Check for existing session
         const existingAccount = client.getActiveAccount();
         if (existingAccount) {
           setAccount({
@@ -49,7 +71,6 @@ export function CasperProvider({ children }: CasperProviderProps) {
           setIsConnected(true);
         }
 
-        // Listen for account changes
         client.on('csprclick:signed_in', (evt: any) => {
           const acc = evt.account;
           setAccount({
@@ -74,30 +95,38 @@ export function CasperProvider({ children }: CasperProviderProps) {
 
         setCsprClick(client);
       } catch (err) {
-        console.error('Failed to initialize CSPR.click:', err);
-        setError('Failed to initialize wallet connection');
+        console.warn('CSPR.click SDK not available, switching to demo mode:', err);
+        setIsDemoMode(true);
       }
     };
 
     initCsprClick();
-  }, []);
+  }, [isDemoMode]);
 
-  const connect = useCallback(async (provider: WalletProvider = 'casper-wallet') => {
-    if (!csprClick) {
-      setError('Wallet service not initialized');
-      return;
-    }
-
+  const connect = useCallback(async (provider?: WalletProvider) => {
     setIsConnecting(true);
     setError(null);
 
     try {
-      const result = await csprClick.connect(provider);
+      if (isDemoMode) {
+        // Simulate connection delay
+        await new Promise(resolve => setTimeout(resolve, 500));
+        setAccount(DEMO_ACCOUNT);
+        setIsConnected(true);
+        return;
+      }
+
+      if (!csprClick) {
+        setError('Wallet service not initialized');
+        return;
+      }
+
+      const result = await csprClick.connect(provider || 'casper-wallet');
       if (result) {
         setAccount({
           publicKey: result.public_key,
           balance: result.balance,
-          provider: provider,
+          provider: provider || 'casper-wallet',
           name: result.name || undefined,
         });
         setIsConnected(true);
@@ -108,9 +137,16 @@ export function CasperProvider({ children }: CasperProviderProps) {
     } finally {
       setIsConnecting(false);
     }
-  }, [csprClick]);
+  }, [csprClick, isDemoMode]);
 
   const disconnect = useCallback(() => {
+    if (isDemoMode) {
+      setAccount(null);
+      setIsConnected(false);
+      setError(null);
+      return;
+    }
+
     if (!csprClick) return;
 
     try {
@@ -122,9 +158,14 @@ export function CasperProvider({ children }: CasperProviderProps) {
       console.error('Disconnect failed:', err);
       setError(err.message || 'Failed to disconnect');
     }
-  }, [csprClick]);
+  }, [csprClick, isDemoMode]);
 
   const signMessage = useCallback(async (message: string): Promise<string | null> => {
+    if (isDemoMode) {
+      // Return mock signature
+      return `demo-signature-${Date.now()}`;
+    }
+
     if (!csprClick || !account) {
       setError('No wallet connected');
       return null;
@@ -138,9 +179,14 @@ export function CasperProvider({ children }: CasperProviderProps) {
       setError(err.message || 'Failed to sign message');
       return null;
     }
-  }, [csprClick, account]);
+  }, [csprClick, account, isDemoMode]);
 
   const signAndSendDeploy = useCallback(async (deploy: unknown): Promise<string | null> => {
+    if (isDemoMode) {
+      // Return mock deploy hash
+      return `demo-deploy-${Date.now().toString(36)}`;
+    }
+
     if (!csprClick || !account) {
       setError('No wallet connected');
       return null;
@@ -154,7 +200,7 @@ export function CasperProvider({ children }: CasperProviderProps) {
       setError(err.message || 'Failed to send transaction');
       return null;
     }
-  }, [csprClick, account]);
+  }, [csprClick, account, isDemoMode]);
 
   const value: CasperContextType = {
     isConnected,

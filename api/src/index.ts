@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
+import { serve } from '@hono/node-server';
 import { health } from './routes/health.js';
 import { escrow } from './routes/escrow.js';
 
@@ -59,7 +60,9 @@ console.log(`
 Server running on http://localhost:${port}
 `);
 
-export default {
-  port,
+serve({
   fetch: app.fetch,
-};
+  port,
+});
+
+export default app;
