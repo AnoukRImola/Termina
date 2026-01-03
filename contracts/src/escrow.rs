@@ -1,7 +1,7 @@
 //! Main Escrow contract implementation
 
 use odra::prelude::*;
-use odra::{Address, Var};
+use odra::prelude::{Address, Var};
 
 use crate::events::*;
 use crate::types::*;
@@ -217,7 +217,7 @@ impl Escrow {
 
     fn require_state(&self, expected: EscrowState) {
         let current = self.state.get_or_default();
-        if std::mem::discriminant(&current) != std::mem::discriminant(&expected) {
+        if core::mem::discriminant(&current) != core::mem::discriminant(&expected) {
             self.env().revert(EscrowError::InvalidState);
         }
     }
@@ -253,7 +253,9 @@ pub enum EscrowError {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::Escrow;
+    use crate::escrow::EscrowInitArgs;
+    use crate::types::*;
     use odra::host::Deployer;
 
     #[test]
@@ -274,7 +276,8 @@ mod tests {
             due_date: None,
         };
 
-        let mut escrow = Escrow::deploy(&env, config);
+        let init_args = EscrowInitArgs { config };
+        let mut escrow = Escrow::deploy(&env, init_args);
 
         assert!(matches!(escrow.get_state(), EscrowState::Draft));
 

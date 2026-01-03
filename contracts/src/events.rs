@@ -1,7 +1,7 @@
 //! Events emitted by the Escrow contract
 
 use odra::prelude::*;
-use odra::Address;
+use odra::prelude::Address;
 
 /// Emitted when a new escrow is created
 #[odra::event]

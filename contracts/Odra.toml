@@ -1,6 +1,5 @@
 [project]
 name = "termina-contracts"
-modules = ["Escrow"]
 
-[contracts]
-faucet_address = ""
+[[contracts]]
+fqn = "termina_contracts::Escrow"

@@ -1,7 +1,7 @@
 //! Core types for the Escrow contract
 
 use odra::prelude::*;
-use odra::Address;
+use odra::prelude::Address;
 
 /// Represents the current state of an escrow
 #[odra::odra_type]

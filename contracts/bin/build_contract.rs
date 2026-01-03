@@ -1,11 +1,5 @@
-use std::process::Command;
-
-fn main() {
-    let output = Command::new("cargo")
-        .args(["odra", "build"])
-        .output()
-        .expect("Failed to execute build command");
-
-    println!("{}", String::from_utf8_lossy(&output.stdout));
-    eprintln!("{}", String::from_utf8_lossy(&output.stderr));
-}
+#![doc = "Binary for building wasm files from odra contracts."]
+#![no_std]
+#![no_main]
+#![allow(unused_imports, clippy::single_component_path_imports)]
+use termina_contracts;
