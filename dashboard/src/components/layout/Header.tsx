@@ -1,6 +1,7 @@
 'use client';
 
 import { Bell, Search } from 'lucide-react';
+import { WalletConnect } from '@/components/wallet';
 
 interface HeaderProps {
   title: string;
@@ -36,6 +37,9 @@ export function Header({ title, description, actions }: HeaderProps) {
           <Bell className="w-5 h-5" />
           <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
         </button>
+
+        {/* Wallet Connection */}
+        <WalletConnect />
       </div>
     </header>
   );
