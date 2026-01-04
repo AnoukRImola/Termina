@@ -3,6 +3,11 @@
 //! This crate provides programmable escrow contracts for enterprise workflows,
 //! demonstrated through B2B invoice tokenization.
 
+#![cfg_attr(target_arch = "wasm32", no_std)]
+#![cfg_attr(target_arch = "wasm32", no_main)]
+
+extern crate alloc;
+
 pub mod escrow;
 pub mod events;
 pub mod types;

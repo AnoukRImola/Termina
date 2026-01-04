@@ -1,0 +1,81 @@
+[package]
+name = "escrow-native"
+version = "0.1.0"
+edition = "2021"
+authors = ["Termina Team"]
+description = "Native Escrow contract for Casper 2.0"
+
+[dependencies]
+casper-contract = "5"
+casper-types = "6"
+
+[features]
+default = []
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 'z'
+
+[[bin]]
+name = "escrow"
+path = "src/main.rs"
+bench = false
+doctest = false
+test = false
+
+[[bin]]
+name = "minimal"
+path = "src/minimal.rs"
+bench = false
+doctest = false
+test = false
+
+[[bin]]
+name = "test_args"
+path = "src/test_args.rs"
+bench = false
+doctest = false
+test = false
+
+[[bin]]
+name = "test_string"
+path = "src/test_string.rs"
+bench = false
+doctest = false
+test = false
+
+[[bin]]
+name = "test_both"
+path = "src/test_both.rs"
+bench = false
+doctest = false
+test = false
+
+[[bin]]
+name = "escrow_minimal"
+path = "src/escrow_minimal.rs"
+bench = false
+doctest = false
+test = false
+
+[[bin]]
+name = "test_new_contract"
+path = "src/test_new_contract.rs"
+bench = false
+doctest = false
+test = false
+
+[[bin]]
+name = "test_no_contract"
+path = "src/test_no_contract.rs"
+bench = false
+doctest = false
+test = false
+
+[[bin]]
+name = "test_simple_contract"
+path = "src/test_simple_contract.rs"
+bench = false
+doctest = false
+test = false
