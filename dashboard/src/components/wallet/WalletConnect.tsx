@@ -4,14 +4,7 @@ import { useState } from 'react';
 import { useCasper } from '@/lib/casper';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
-import { Wallet, ChevronDown, LogOut, Copy, Check, ExternalLink } from 'lucide-react';
-import type { WalletProvider } from '@/lib/casper';
-
-const walletProviders: { id: WalletProvider; name: string; icon: string }[] = [
-  { id: 'casper-wallet', name: 'Casper Wallet', icon: '🔐' },
-  { id: 'ledger', name: 'Ledger', icon: '🔑' },
-  { id: 'casperdash', name: 'CasperDash', icon: '⚡' },
-];
+import { Wallet, ChevronDown, LogOut, Copy, Check, ExternalLink, Loader2 } from 'lucide-react';
 
 function truncateAddress(address: string): string {
   if (!address) return '';
@@ -26,13 +19,11 @@ function formatBalance(balance: string | undefined): string {
 
 export function WalletConnect() {
   const { isConnected, isConnecting, account, error, connect, disconnect } = useCasper();
-  const [showDropdown, setShowDropdown] = useState(false);
   const [showWalletMenu, setShowWalletMenu] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const handleConnect = async (provider: WalletProvider) => {
-    await connect(provider);
-    setShowDropdown(false);
+  const handleConnect = async () => {
+    await connect();
   };
 
   const handleCopyAddress = async () => {
@@ -133,45 +124,17 @@ export function WalletConnect() {
   return (
     <div className="relative">
       <Button
-        onClick={() => setShowDropdown(!showDropdown)}
+        onClick={handleConnect}
         disabled={isConnecting}
         variant="outline"
       >
-        <Wallet className="w-4 h-4" />
+        {isConnecting ? (
+          <Loader2 className="w-4 h-4 animate-spin" />
+        ) : (
+          <Wallet className="w-4 h-4" />
+        )}
         {isConnecting ? 'Connecting...' : 'Connect Wallet'}
-        <ChevronDown className={cn(
-          'w-4 h-4 transition-transform',
-          showDropdown && 'rotate-180'
-        )} />
       </Button>
-
-      {showDropdown && (
-        <>
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setShowDropdown(false)}
-          />
-          <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl border border-slate-200 shadow-lg z-50 overflow-hidden">
-            <div className="p-3 border-b border-slate-100">
-              <p className="text-sm font-medium text-slate-900">Connect Wallet</p>
-              <p className="text-xs text-slate-500">Choose your preferred wallet</p>
-            </div>
-            <div className="p-2">
-              {walletProviders.map((provider) => (
-                <button
-                  key={provider.id}
-                  onClick={() => handleConnect(provider.id)}
-                  disabled={isConnecting}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors disabled:opacity-50"
-                >
-                  <span className="text-lg">{provider.icon}</span>
-                  <span className="font-medium">{provider.name}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
 
       {error && (
         <p className="absolute top-full mt-2 right-0 text-xs text-red-600 whitespace-nowrap">

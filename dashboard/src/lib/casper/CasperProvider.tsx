@@ -1,11 +1,42 @@
 'use client';
 
 import { createContext, useContext, useCallback, useState, useEffect, ReactNode } from 'react';
-import type { CasperContextType, CasperAccount, WalletProvider } from './types';
+import type { CasperContextType, CasperAccount } from './types';
 
-// Demo mode for hackathon - simulates wallet without actual SDK
-const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE !== 'false';
-const CSPR_CLICK_APP_ID = 'termina-invoices';
+// Casper Wallet Provider types (injected by browser extension)
+interface SignatureResponse {
+  cancelled: boolean;
+  signatureHex?: string;
+  signature?: Uint8Array;
+}
+
+interface CasperWalletProviderType {
+  requestConnection: () => Promise<boolean>;
+  disconnectFromSite: () => Promise<boolean>;
+  isConnected: () => Promise<boolean>;
+  getActivePublicKey: () => Promise<string>;
+  sign: (deployJson: string, signingPublicKeyHex: string) => Promise<SignatureResponse>;
+  signMessage: (message: string, signingPublicKeyHex: string) => Promise<SignatureResponse>;
+}
+
+interface CasperWalletEventDetail {
+  isConnected?: boolean;
+  isUnlocked?: boolean;
+  activeKey?: string;
+}
+
+declare global {
+  interface Window {
+    CasperWalletProvider?: () => CasperWalletProviderType;
+    CasperWalletEventTypes?: {
+      Connected: string;
+      Disconnected: string;
+      ActiveKeyChanged: string;
+      Locked: string;
+      Unlocked: string;
+    };
+  }
+}
 
 const CasperContext = createContext<CasperContextType | null>(null);
 
@@ -13,194 +44,178 @@ interface CasperProviderProps {
   children: ReactNode;
 }
 
-// Demo account for testing
-const DEMO_ACCOUNT: CasperAccount = {
-  publicKey: '01a2b3c4d5e6f7890123456789abcdef01a2b3c4d5e6f7890123456789abcdef01',
-  balance: '10000000000000', // 10,000 CSPR in motes
-  provider: 'demo',
-  name: 'Demo Account',
-};
-
 export function CasperProvider({ children }: CasperProviderProps) {
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [account, setAccount] = useState<CasperAccount | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [csprClick, setCsprClick] = useState<any>(null);
-  const [isDemoMode, setIsDemoMode] = useState(DEMO_MODE);
+  const [provider, setProvider] = useState<CasperWalletProviderType | null>(null);
 
-  // Initialize CSPR.click on mount (if not in demo mode)
+  // Initialize wallet provider
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (isDemoMode) {
-      console.log('Running in demo mode - wallet simulation enabled');
-      return;
-    }
 
-    const initCsprClick = async () => {
-      try {
-        // Dynamic import - wrapped to prevent build-time resolution
-        const clientModule = await import(
-          /* webpackIgnore: true */
-          '@make-software/csprclick-core-client'
-        );
-        const typesModule = await import(
-          /* webpackIgnore: true */
-          '@make-software/csprclick-core-types'
-        );
-
-        const { CSPRClickSDK } = clientModule;
-        const { CONTENT_MODE } = typesModule;
-
-        const client = new CSPRClickSDK();
-        client.init({
-          appName: 'Termina',
-          appId: CSPR_CLICK_APP_ID,
-          contentMode: CONTENT_MODE.IFRAME,
-          providers: ['casper-wallet', 'ledger', 'casperdash'],
+    const initProvider = async () => {
+      // Wait for the wallet extension to inject the provider
+      const waitForProvider = (retries = 10): Promise<CasperWalletProviderType | null> => {
+        return new Promise((resolve) => {
+          if (window.CasperWalletProvider) {
+            resolve(window.CasperWalletProvider());
+          } else if (retries > 0) {
+            setTimeout(() => resolve(waitForProvider(retries - 1)), 200);
+          } else {
+            resolve(null);
+          }
         });
+      };
 
-        const existingAccount = client.getActiveAccount();
-        if (existingAccount) {
+      const walletProvider = await waitForProvider();
+
+      if (!walletProvider) {
+        // Wallet extension not installed - this is fine, user can install it later
+        console.log('Casper Wallet extension not detected');
+        return;
+      }
+
+      setProvider(walletProvider);
+
+      // Check if already connected
+      try {
+        const connected = await walletProvider.isConnected();
+        if (connected) {
+          const publicKey = await walletProvider.getActivePublicKey();
           setAccount({
-            publicKey: existingAccount.public_key,
-            balance: existingAccount.balance,
-            provider: existingAccount.provider || 'unknown',
-            name: existingAccount.name || undefined,
+            publicKey,
+            provider: 'casper-wallet',
           });
           setIsConnected(true);
         }
-
-        client.on('csprclick:signed_in', (evt: any) => {
-          const acc = evt.account;
-          setAccount({
-            publicKey: acc.public_key,
-            balance: acc.balance,
-            provider: acc.provider || 'unknown',
-            name: acc.name || undefined,
-          });
-          setIsConnected(true);
-          setError(null);
-        });
-
-        client.on('csprclick:signed_out', () => {
-          setAccount(null);
-          setIsConnected(false);
-        });
-
-        client.on('csprclick:disconnected', () => {
-          setAccount(null);
-          setIsConnected(false);
-        });
-
-        setCsprClick(client);
       } catch (err) {
-        console.warn('CSPR.click SDK not available, switching to demo mode:', err);
-        setIsDemoMode(true);
+        console.error('Error checking connection:', err);
       }
     };
 
-    initCsprClick();
-  }, [isDemoMode]);
+    initProvider();
 
-  const connect = useCallback(async (provider?: WalletProvider) => {
+    // Listen for wallet events
+    const handleWalletEvent = (event: CustomEvent<CasperWalletEventDetail>) => {
+      const { activeKey, isConnected: connected } = event.detail || {};
+
+      if (connected === false) {
+        setAccount(null);
+        setIsConnected(false);
+      } else if (activeKey) {
+        setAccount({
+          publicKey: activeKey,
+          provider: 'casper-wallet',
+        });
+        setIsConnected(true);
+      }
+    };
+
+    // Add event listeners for wallet events
+    window.addEventListener('casper-wallet:connected', handleWalletEvent as EventListener);
+    window.addEventListener('casper-wallet:disconnected', handleWalletEvent as EventListener);
+    window.addEventListener('casper-wallet:activeKeyChanged', handleWalletEvent as EventListener);
+
+    return () => {
+      window.removeEventListener('casper-wallet:connected', handleWalletEvent as EventListener);
+      window.removeEventListener('casper-wallet:disconnected', handleWalletEvent as EventListener);
+      window.removeEventListener('casper-wallet:activeKeyChanged', handleWalletEvent as EventListener);
+    };
+  }, []);
+
+  const connect = useCallback(async () => {
+    if (!provider) {
+      // Open Casper Wallet download page if not installed
+      window.open('https://www.casperwallet.io/download', '_blank');
+      setError('Please install Casper Wallet extension');
+      return;
+    }
+
     setIsConnecting(true);
     setError(null);
 
     try {
-      if (isDemoMode) {
-        // Simulate connection delay
-        await new Promise(resolve => setTimeout(resolve, 500));
-        setAccount(DEMO_ACCOUNT);
-        setIsConnected(true);
-        return;
-      }
+      const connected = await provider.requestConnection();
 
-      if (!csprClick) {
-        setError('Wallet service not initialized');
-        return;
-      }
-
-      const result = await csprClick.connect(provider || 'casper-wallet');
-      if (result) {
+      if (connected) {
+        const publicKey = await provider.getActivePublicKey();
         setAccount({
-          publicKey: result.public_key,
-          balance: result.balance,
-          provider: provider || 'casper-wallet',
-          name: result.name || undefined,
+          publicKey,
+          provider: 'casper-wallet',
         });
         setIsConnected(true);
+      } else {
+        setError('Connection request was rejected');
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Connection failed:', err);
-      setError(err.message || 'Failed to connect wallet');
+      setError(err instanceof Error ? err.message : 'Failed to connect wallet');
     } finally {
       setIsConnecting(false);
     }
-  }, [csprClick, isDemoMode]);
+  }, [provider]);
 
-  const disconnect = useCallback(() => {
-    if (isDemoMode) {
-      setAccount(null);
-      setIsConnected(false);
-      setError(null);
-      return;
-    }
-
-    if (!csprClick) return;
+  const disconnect = useCallback(async () => {
+    if (!provider) return;
 
     try {
-      csprClick.signOut();
+      await provider.disconnectFromSite();
       setAccount(null);
       setIsConnected(false);
       setError(null);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Disconnect failed:', err);
-      setError(err.message || 'Failed to disconnect');
+      setError(err instanceof Error ? err.message : 'Failed to disconnect');
     }
-  }, [csprClick, isDemoMode]);
+  }, [provider]);
 
   const signMessage = useCallback(async (message: string): Promise<string | null> => {
-    if (isDemoMode) {
-      // Return mock signature
-      return `demo-signature-${Date.now()}`;
-    }
-
-    if (!csprClick || !account) {
+    if (!provider || !account) {
       setError('No wallet connected');
       return null;
     }
 
     try {
-      const result = await csprClick.signMessage(message, account.publicKey);
-      return result?.signature || null;
-    } catch (err: any) {
+      const result = await provider.signMessage(message, account.publicKey);
+      if (result.cancelled) {
+        setError('Signing was cancelled');
+        return null;
+      }
+      return result.signatureHex || null;
+    } catch (err) {
       console.error('Sign message failed:', err);
-      setError(err.message || 'Failed to sign message');
+      setError(err instanceof Error ? err.message : 'Failed to sign message');
       return null;
     }
-  }, [csprClick, account, isDemoMode]);
+  }, [provider, account]);
 
   const signAndSendDeploy = useCallback(async (deploy: unknown): Promise<string | null> => {
-    if (isDemoMode) {
-      // Return mock deploy hash
-      return `demo-deploy-${Date.now().toString(36)}`;
-    }
-
-    if (!csprClick || !account) {
+    if (!provider || !account) {
       setError('No wallet connected');
       return null;
     }
 
     try {
-      const result = await csprClick.send(deploy, account.publicKey);
-      return result?.deployHash || null;
-    } catch (err: any) {
+      const deployJson = typeof deploy === 'string' ? deploy : JSON.stringify(deploy);
+      const result = await provider.sign(deployJson, account.publicKey);
+
+      if (result.cancelled) {
+        setError('Transaction was cancelled');
+        return null;
+      }
+
+      // Note: The Casper Wallet only signs, it doesn't send.
+      // The signed deploy needs to be sent to the network separately.
+      // For now, return the signature as confirmation
+      return result.signatureHex || 'signed';
+    } catch (err) {
       console.error('Deploy failed:', err);
-      setError(err.message || 'Failed to send transaction');
+      setError(err instanceof Error ? err.message : 'Failed to sign transaction');
       return null;
     }
-  }, [csprClick, account, isDemoMode]);
+  }, [provider, account]);
 
   const value: CasperContextType = {
     isConnected,

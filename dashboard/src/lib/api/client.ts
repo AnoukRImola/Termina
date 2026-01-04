@@ -74,6 +74,24 @@ export interface BuildDeployResult {
   deployJson: string;
 }
 
+// List response type
+export interface EscrowListResponse {
+  contractAddress: string;
+  state: string;
+  invoice: {
+    id: string;
+    description: string;
+    amount: number;
+    issuerAddress: string;
+    payerAddress: string;
+    arbiterAddress?: string;
+    createdAt: string;
+    dueDate?: string;
+  };
+  balance: number;
+  disputeReason?: string;
+}
+
 // API Client
 export const api = {
   // Health check
@@ -83,6 +101,10 @@ export const api = {
 
   // Escrow operations (demo mode)
   escrow: {
+    async list(): Promise<EscrowListResponse[]> {
+      return request('/escrow');
+    },
+
     async create(params: CreateEscrowParams, issuerAddress: string): Promise<DeployResult> {
       return request('/escrow', {
         method: 'POST',

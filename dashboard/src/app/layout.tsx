@@ -1,21 +1,22 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import { CasperProvider } from "@/lib/casper";
+import { Navbar } from "@/components/docs/Navbar";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "Termina - Invoice Management with Guaranteed Payments",
-  description: "Stop chasing payments. Termina ensures your invoices get paid on time with conditional payment holds and automated release workflows.",
+  title: "Términa Escrow - Trustless B2B Payments on Casper",
+  description: "A decentralized escrow infrastructure for secure B2B payments on the Casper blockchain. Create trustless invoices with automated payment holds and dispute resolution.",
+  keywords: ["casper", "blockchain", "escrow", "b2b", "payments", "smart contract"],
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({
@@ -25,11 +26,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className={`${inter.variable} antialiased`}>
         <CasperProvider>
-          {children}
+          <Navbar />
+          <main className="pt-16">
+            {children}
+          </main>
         </CasperProvider>
       </body>
     </html>

@@ -15,7 +15,7 @@ export interface CasperWalletState {
 export type WalletProvider = 'casper-wallet' | 'ledger' | 'metamask-snap' | 'casperdash';
 
 export interface CasperContextType extends CasperWalletState {
-  connect: (provider?: WalletProvider) => Promise<void>;
+  connect: () => Promise<void>;
   disconnect: () => void;
   signMessage: (message: string) => Promise<string | null>;
   signAndSendDeploy: (deploy: unknown) => Promise<string | null>;
