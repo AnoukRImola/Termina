@@ -1,14 +1,31 @@
+'use client';
+
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
 import { StatsCard } from '@/components/invoices/StatsCard';
 import { InvoiceTable } from '@/components/invoices/InvoiceTable';
-import { mockInvoices } from '@/lib/mock-data';
-import { FileText, DollarSign, Clock, AlertTriangle, Plus } from 'lucide-react';
+import { useInvoices } from '@/hooks';
+import { formatCurrency } from '@/lib/utils';
+import { FileText, DollarSign, Clock, AlertTriangle, Plus, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
 export default function DashboardPage() {
-  const recentInvoices = mockInvoices.slice(0, 5);
+  const { invoices, isLoading } = useInvoices();
+
+  // Calculate stats from real data
+  const totalInvoices = invoices.length;
+  const pendingAmount = invoices
+    .filter(inv => ['draft', 'pending', 'accepted'].includes(inv.status))
+    .reduce((sum, inv) => sum + inv.amount, 0);
+  const completedAmount = invoices
+    .filter(inv => inv.status === 'completed')
+    .reduce((sum, inv) => sum + inv.amount, 0);
+  const requiresAttention = invoices
+    .filter(inv => ['disputed', 'cancelled'].includes(inv.status))
+    .length;
+
+  const recentInvoices = invoices.slice(0, 5);
 
   return (
     <DashboardLayout>
@@ -30,28 +47,25 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <StatsCard
             title="Total Invoices"
-            value="24"
-            change={{ value: '12%', positive: true }}
+            value={isLoading ? '-' : totalInvoices.toString()}
             icon={FileText}
             iconColor="bg-blue-100 text-blue-800"
           />
           <StatsCard
             title="Pending Amount"
-            value="$85,000"
-            change={{ value: '8%', positive: true }}
+            value={isLoading ? '-' : formatCurrency(pendingAmount, 'USD')}
             icon={Clock}
             iconColor="bg-amber-100 text-amber-800"
           />
           <StatsCard
-            title="Completed This Month"
-            value="$156,000"
-            change={{ value: '23%', positive: true }}
+            title="Completed"
+            value={isLoading ? '-' : formatCurrency(completedAmount, 'USD')}
             icon={DollarSign}
             iconColor="bg-emerald-100 text-emerald-800"
           />
           <StatsCard
             title="Requires Attention"
-            value="2"
+            value={isLoading ? '-' : requiresAttention.toString()}
             icon={AlertTriangle}
             iconColor="bg-red-100 text-red-800"
           />
@@ -70,7 +84,24 @@ export default function DashboardPage() {
               </Button>
             </Link>
           </div>
-          <InvoiceTable invoices={recentInvoices} />
+          {isLoading ? (
+            <div className="p-8 text-center">
+              <Loader2 className="w-6 h-6 animate-spin text-blue-600 mx-auto mb-2" />
+              <p className="text-sm text-slate-500">Loading invoices...</p>
+            </div>
+          ) : recentInvoices.length === 0 ? (
+            <div className="p-8 text-center">
+              <p className="text-slate-500">No invoices yet. Create your first invoice to get started.</p>
+              <Link href="/invoices/new">
+                <Button className="mt-4">
+                  <Plus className="w-4 h-4" />
+                  Create Invoice
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <InvoiceTable invoices={recentInvoices} />
+          )}
         </div>
       </div>
     </DashboardLayout>

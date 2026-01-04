@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { api, ApiError } from '@/lib/api';
+import { useState, useCallback, useEffect } from 'react';
+import { api, ApiError, type EscrowListResponse } from '@/lib/api';
 import { useCasper } from '@/lib/casper';
 import type { Invoice, InvoiceStatus } from '@/types';
 
@@ -9,6 +9,8 @@ interface UseInvoicesReturn {
   invoices: Invoice[];
   isLoading: boolean;
   error: string | null;
+  fetchInvoices: () => Promise<void>;
+  getInvoice: (id: string) => Promise<Invoice | null>;
   createInvoice: (params: CreateInvoiceParams) => Promise<Invoice | null>;
   acceptInvoice: (invoiceId: string) => Promise<boolean>;
   fundInvoice: (invoiceId: string, amount: number) => Promise<boolean>;
@@ -29,21 +31,96 @@ interface CreateInvoiceParams {
 // Map API state to UI status
 function mapStateToStatus(state: string): InvoiceStatus {
   const stateMap: Record<string, InvoiceStatus> = {
-    'Draft': 'draft',
-    'Accepted': 'accepted',
-    'Funded': 'funded',
-    'Released': 'completed',
-    'Cancelled': 'cancelled',
-    'Disputed': 'disputed',
+    'draft': 'draft',
+    'accepted': 'accepted',
+    'funded': 'funded',
+    'released': 'completed',
+    'cancelled': 'cancelled',
+    'disputed': 'disputed',
   };
-  return stateMap[state] || 'pending';
+  return stateMap[state.toLowerCase()] || 'pending';
+}
+
+// Convert API escrow to Invoice format
+function escrowToInvoice(escrow: EscrowListResponse): Invoice {
+  return {
+    id: escrow.contractAddress,
+    invoiceNumber: escrow.invoice.id,
+    description: escrow.invoice.description,
+    amount: escrow.invoice.amount,
+    currency: 'USD',
+    status: mapStateToStatus(escrow.state),
+    issuer: {
+      id: escrow.invoice.issuerAddress,
+      name: escrow.invoice.issuerAddress.slice(0, 16) + '...',
+      email: 'issuer@demo.com',
+    },
+    payer: {
+      id: escrow.invoice.payerAddress,
+      name: escrow.invoice.payerAddress.slice(0, 16) + '...',
+      email: escrow.invoice.payerAddress,
+    },
+    createdAt: escrow.invoice.createdAt,
+    dueDate: escrow.invoice.dueDate,
+    notes: escrow.disputeReason,
+  };
 }
 
 export function useInvoices(): UseInvoicesReturn {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { account, isConnected, signAndSendDeploy } = useCasper();
+  const { account, isConnected } = useCasper();
+
+  // Fetch all invoices from API
+  const fetchInvoices = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const escrows = await api.escrow.list();
+      const invoiceList = escrows.map(escrowToInvoice);
+      setInvoices(invoiceList);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Failed to fetch invoices';
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Get single invoice from API
+  const getInvoice = useCallback(async (id: string): Promise<Invoice | null> => {
+    try {
+      const escrow = await api.escrow.get(id);
+      return {
+        id: escrow.contractAddress,
+        invoiceNumber: escrow.invoice.id,
+        description: escrow.invoice.description,
+        amount: escrow.invoice.amount,
+        currency: 'USD',
+        status: mapStateToStatus(escrow.state),
+        issuer: {
+          id: escrow.invoice.issuerAddress,
+          name: escrow.invoice.issuerAddress.slice(0, 16) + '...',
+          email: 'issuer@demo.com',
+        },
+        payer: {
+          id: escrow.invoice.payerAddress,
+          name: escrow.invoice.payerAddress.slice(0, 16) + '...',
+          email: escrow.invoice.payerAddress,
+        },
+        createdAt: escrow.invoice.createdAt,
+      };
+    } catch (err) {
+      return null;
+    }
+  }, []);
+
+  // Load invoices on mount
+  useEffect(() => {
+    fetchInvoices();
+  }, [fetchInvoices]);
 
   const createInvoice = useCallback(async (params: CreateInvoiceParams): Promise<Invoice | null> => {
     if (!isConnected || !account) {
@@ -93,7 +170,8 @@ export function useInvoices(): UseInvoicesReturn {
         notes: params.notes,
       };
 
-      setInvoices(prev => [newInvoice, ...prev]);
+      // Refresh list to get data from API
+      await fetchInvoices();
       return newInvoice;
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Failed to create invoice';
@@ -102,7 +180,7 @@ export function useInvoices(): UseInvoicesReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [isConnected, account]);
+  }, [isConnected, account, fetchInvoices]);
 
   const acceptInvoice = useCallback(async (invoiceId: string): Promise<boolean> => {
     if (!isConnected || !account) {
@@ -115,14 +193,7 @@ export function useInvoices(): UseInvoicesReturn {
 
     try {
       await api.escrow.accept(invoiceId, account.publicKey);
-
-      // Update local state
-      setInvoices(prev =>
-        prev.map(inv =>
-          inv.id === invoiceId ? { ...inv, status: 'accepted' as InvoiceStatus } : inv
-        )
-      );
-
+      await fetchInvoices();
       return true;
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Failed to accept invoice';
@@ -131,7 +202,7 @@ export function useInvoices(): UseInvoicesReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [isConnected, account]);
+  }, [isConnected, account, fetchInvoices]);
 
   const fundInvoice = useCallback(async (invoiceId: string, amount: number): Promise<boolean> => {
     if (!isConnected || !account) {
@@ -144,14 +215,7 @@ export function useInvoices(): UseInvoicesReturn {
 
     try {
       await api.escrow.fund(invoiceId, amount, account.publicKey);
-
-      // Update local state
-      setInvoices(prev =>
-        prev.map(inv =>
-          inv.id === invoiceId ? { ...inv, status: 'funded' as InvoiceStatus } : inv
-        )
-      );
-
+      await fetchInvoices();
       return true;
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Failed to fund invoice';
@@ -160,7 +224,7 @@ export function useInvoices(): UseInvoicesReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [isConnected, account]);
+  }, [isConnected, account, fetchInvoices]);
 
   const releaseInvoice = useCallback(async (invoiceId: string): Promise<boolean> => {
     if (!isConnected || !account) {
@@ -173,16 +237,7 @@ export function useInvoices(): UseInvoicesReturn {
 
     try {
       await api.escrow.release(invoiceId, account.publicKey);
-
-      // Update local state
-      setInvoices(prev =>
-        prev.map(inv =>
-          inv.id === invoiceId
-            ? { ...inv, status: 'completed' as InvoiceStatus, paidAt: new Date().toISOString() }
-            : inv
-        )
-      );
-
+      await fetchInvoices();
       return true;
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Failed to release funds';
@@ -191,7 +246,7 @@ export function useInvoices(): UseInvoicesReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [isConnected, account]);
+  }, [isConnected, account, fetchInvoices]);
 
   const cancelInvoice = useCallback(async (invoiceId: string): Promise<boolean> => {
     if (!isConnected || !account) {
@@ -204,14 +259,7 @@ export function useInvoices(): UseInvoicesReturn {
 
     try {
       await api.escrow.cancel(invoiceId, account.publicKey);
-
-      // Update local state
-      setInvoices(prev =>
-        prev.map(inv =>
-          inv.id === invoiceId ? { ...inv, status: 'cancelled' as InvoiceStatus } : inv
-        )
-      );
-
+      await fetchInvoices();
       return true;
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Failed to cancel invoice';
@@ -220,7 +268,7 @@ export function useInvoices(): UseInvoicesReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [isConnected, account]);
+  }, [isConnected, account, fetchInvoices]);
 
   const refreshInvoice = useCallback(async (invoiceId: string): Promise<void> => {
     setIsLoading(true);
@@ -253,6 +301,8 @@ export function useInvoices(): UseInvoicesReturn {
     invoices,
     isLoading,
     error,
+    fetchInvoices,
+    getInvoice,
     createInvoice,
     acceptInvoice,
     fundInvoice,

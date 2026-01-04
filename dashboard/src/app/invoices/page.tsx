@@ -6,8 +6,8 @@ import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
 import { InvoiceTable } from '@/components/invoices/InvoiceTable';
 import { InvoiceCard } from '@/components/invoices/InvoiceCard';
-import { mockInvoices } from '@/lib/mock-data';
-import { Plus, LayoutGrid, List, Filter } from 'lucide-react';
+import { useInvoices } from '@/hooks';
+import { Plus, LayoutGrid, List, Filter, Loader2, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import type { InvoiceStatus } from '@/types';
@@ -16,18 +16,21 @@ const statusFilters: { value: InvoiceStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'All Invoices' },
   { value: 'draft', label: 'Drafts' },
   { value: 'pending', label: 'Pending' },
+  { value: 'accepted', label: 'Accepted' },
   { value: 'funded', label: 'Payment Secured' },
   { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
   { value: 'disputed', label: 'Under Review' },
 ];
 
 export default function InvoicesPage() {
   const [view, setView] = useState<'grid' | 'table'>('table');
   const [statusFilter, setStatusFilter] = useState<InvoiceStatus | 'all'>('all');
+  const { invoices, isLoading, error, fetchInvoices } = useInvoices();
 
   const filteredInvoices = statusFilter === 'all'
-    ? mockInvoices
-    : mockInvoices.filter((inv) => inv.status === statusFilter);
+    ? invoices
+    : invoices.filter((inv) => inv.status === statusFilter);
 
   return (
     <DashboardLayout>
@@ -65,8 +68,17 @@ export default function InvoicesPage() {
             ))}
           </div>
 
-          {/* View Toggle */}
+          {/* View Toggle and Refresh */}
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fetchInvoices()}
+              disabled={isLoading}
+            >
+              <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
+              Refresh
+            </Button>
             <div className="flex items-center bg-white border border-slate-200 rounded-lg p-1">
               <button
                 onClick={() => setView('table')}
@@ -90,8 +102,23 @@ export default function InvoicesPage() {
           </div>
         </div>
 
+        {/* Error message */}
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            {error}
+          </div>
+        )}
+
+        {/* Loading state */}
+        {isLoading && invoices.length === 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
+            <p className="text-slate-500">Loading invoices...</p>
+          </div>
+        )}
+
         {/* Invoice List */}
-        {filteredInvoices.length === 0 ? (
+        {!isLoading && filteredInvoices.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
             <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
               <Filter className="w-6 h-6 text-slate-400" />

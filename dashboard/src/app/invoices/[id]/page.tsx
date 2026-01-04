@@ -1,13 +1,12 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useState, useEffect } from 'react';
 import { notFound } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { getInvoiceById } from '@/lib/mock-data';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { useCasper } from '@/lib/casper';
 import { useInvoices } from '@/hooks';
@@ -31,7 +30,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import Link from 'next/link';
-import type { InvoiceStatus } from '@/types';
+import type { Invoice, InvoiceStatus } from '@/types';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -74,11 +73,42 @@ function getStatusIcon(status: InvoiceStatus, currentStatus: InvoiceStatus) {
 
 export default function InvoiceDetailPage({ params }: PageProps) {
   const { id } = use(params);
-  const invoice = getInvoiceById(id);
   const { isConnected, account, connect } = useCasper();
-  const { acceptInvoice, fundInvoice, releaseInvoice, cancelInvoice, isLoading, error } = useInvoices();
+  const { getInvoice, acceptInvoice, fundInvoice, releaseInvoice, cancelInvoice, isLoading, error } = useInvoices();
+  const [invoice, setInvoice] = useState<Invoice | null>(null);
+  const [loading, setLoading] = useState(true);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
+
+  // Fetch invoice on mount
+  useEffect(() => {
+    async function loadInvoice() {
+      setLoading(true);
+      const data = await getInvoice(id);
+      setInvoice(data);
+      setLoading(false);
+    }
+    loadInvoice();
+  }, [id, getInvoice]);
+
+  // Refresh invoice after action
+  const refreshInvoiceData = async () => {
+    const data = await getInvoice(id);
+    setInvoice(data);
+  };
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
+            <p className="text-slate-500">Loading invoice...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   if (!invoice) {
     notFound();
@@ -113,7 +143,10 @@ export default function InvoiceDetailPage({ params }: PageProps) {
           break;
       }
 
-      if (!success) {
+      if (success) {
+        // Refresh invoice data after successful action
+        await refreshInvoiceData();
+      } else {
         setActionError(error || `Failed to ${action} invoice`);
       }
     } catch (err) {
@@ -385,8 +418,8 @@ export default function InvoiceDetailPage({ params }: PageProps) {
                     </div>
                   )}
 
-                  {/* Accept - available when pending */}
-                  {invoice.status === 'pending' && (
+                  {/* Accept - available when draft or pending */}
+                  {(invoice.status === 'draft' || invoice.status === 'pending') && (
                     <Button
                       onClick={() => handleAction('accept')}
                       disabled={actionInProgress !== null}
