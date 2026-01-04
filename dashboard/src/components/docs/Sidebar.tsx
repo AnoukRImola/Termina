@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BookOpen, Layers, Code2, Plug, FlaskConical } from 'lucide-react';
+import { BookOpen, Layers, Code2, Plug, FlaskConical, Building2, Database } from 'lucide-react';
 
 interface NavItem {
   title: string;
@@ -18,7 +18,28 @@ const navigation: NavItem[] = [
     icon: <BookOpen className="w-4 h-4" />,
     children: [
       { title: 'Overview', href: '/docs' },
-      { title: 'Why Escrow?', href: '/docs#why-escrow' },
+      { title: 'Why Infrastructure?', href: '/docs#why-escrow' },
+    ],
+  },
+  {
+    title: 'Use Cases',
+    href: '/docs/use-cases',
+    icon: <Building2 className="w-4 h-4" />,
+    children: [
+      { title: 'B2B Invoicing', href: '/docs/use-cases#invoicing' },
+      { title: 'Supply Chain', href: '/docs/use-cases#supply-chain' },
+      { title: 'Real Estate', href: '/docs/use-cases#real-estate' },
+      { title: 'SaaS & Licensing', href: '/docs/use-cases#saas' },
+    ],
+  },
+  {
+    title: 'Demo & Blockchain',
+    href: '/docs/demo',
+    icon: <Database className="w-4 h-4" />,
+    children: [
+      { title: 'How the Demo Works', href: '/docs/demo#how-demo-works' },
+      { title: 'On-Chain Data', href: '/docs/demo#on-chain-data' },
+      { title: 'Try It Yourself', href: '/docs/demo#try-it' },
     ],
   },
   {

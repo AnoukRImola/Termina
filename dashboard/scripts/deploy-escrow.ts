@@ -158,8 +158,9 @@ async function deployEscrowContract(
 
   // Build runtime args - simplified for demo (only amount and description)
   // The contract uses runtime::get_caller() for issuer and payer
+  // IMPORTANT: Contract expects u64, not U512!
   const args = Args.fromMap({
-    'amount': CLValue.newCLUInt512(amountMotes.toString()),
+    'amount': CLValue.newCLUint64(amountMotes),
     'description': CLValue.newCLString(description),
   });
 
