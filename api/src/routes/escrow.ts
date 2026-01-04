@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
-import { casperService } from '../services/casper.js';
+import { casperService, getAllDemoEscrows } from '../services/casper.js';
 import {
   CreateEscrowSchema,
   FundEscrowSchema,
@@ -9,6 +9,19 @@ import {
 } from '../types/index.js';
 
 const escrow = new Hono();
+
+/**
+ * List all demo escrows
+ * GET /escrow
+ */
+escrow.get('/', async (c) => {
+  const escrows = getAllDemoEscrows();
+  return c.json({
+    success: true,
+    data: escrows,
+    count: escrows.length,
+  });
+});
 
 /**
  * Create a new escrow/invoice
