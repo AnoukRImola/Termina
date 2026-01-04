@@ -7,6 +7,40 @@ import { Some, None } from 'ts-results';
 import { EscrowState, type EscrowResponse } from '../types/index.js';
 import { createRequire } from 'module';
 
+// ============================================
+// IN-MEMORY STORE FOR DEMO MODE
+// ============================================
+
+interface StoredEscrow {
+  contractAddress: string;
+  state: EscrowState;
+  invoice: {
+    id: string;
+    description: string;
+    amount: number;
+    issuerAddress: string;
+    payerAddress: string;
+    arbiterAddress?: string;
+    createdAt: string;
+    dueDate?: string;
+  };
+  balance: number;
+  disputeReason?: string;
+}
+
+// In-memory store for demo escrows
+const demoEscrowStore = new Map<string, StoredEscrow>();
+
+// Helper to get all demo escrows
+export function getAllDemoEscrows(): StoredEscrow[] {
+  return Array.from(demoEscrowStore.values());
+}
+
+// Helper to clear demo store (useful for testing)
+export function clearDemoStore(): void {
+  demoEscrowStore.clear();
+}
+
 // casper-js-sdk is CJS, use require for ESM compatibility
 const require = createRequire(import.meta.url);
 const casperSdk = require('casper-js-sdk');
@@ -77,6 +111,25 @@ export class CasperService {
     const deployHash = `deploy-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const contractAddress = `hash-${params.id.toLowerCase()}-${Math.random().toString(36).slice(2)}`;
 
+    // Store the escrow in memory
+    const escrow: StoredEscrow = {
+      contractAddress,
+      state: EscrowState.Draft,
+      invoice: {
+        id: params.id,
+        description: params.description,
+        amount: params.amount,
+        issuerAddress: params.issuerAddress,
+        payerAddress: params.payerAddress,
+        arbiterAddress: params.arbiterAddress,
+        createdAt: new Date().toISOString(),
+        dueDate: params.dueDate,
+      },
+      balance: 0,
+    };
+    demoEscrowStore.set(contractAddress, escrow);
+    console.log('Stored demo escrow:', contractAddress);
+
     return { deployHash, contractAddress };
   }
 
@@ -84,44 +137,64 @@ export class CasperService {
    * Get escrow state (demo mode with fallback to real query)
    */
   async getEscrow(contractAddress: string): Promise<EscrowResponse | null> {
-    // Try real query first if contract hash is valid
+    // Check demo store first
+    const demoEscrow = demoEscrowStore.get(contractAddress);
+    if (demoEscrow) {
+      console.log('Found escrow in demo store:', contractAddress);
+      return {
+        contractAddress: demoEscrow.contractAddress,
+        state: demoEscrow.state,
+        invoice: {
+          id: demoEscrow.invoice.id,
+          description: demoEscrow.invoice.description,
+          amount: demoEscrow.invoice.amount,
+          issuerAddress: demoEscrow.invoice.issuerAddress,
+          payerAddress: demoEscrow.invoice.payerAddress,
+          createdAt: demoEscrow.invoice.createdAt,
+        },
+        balance: demoEscrow.balance,
+      };
+    }
+
+    // Try real query if contract hash looks valid
     if (contractAddress.startsWith('hash-')) {
       try {
         return await this.queryEscrowOnChain(contractAddress);
       } catch (error) {
-        console.log('On-chain query failed, using demo data:', error);
+        console.log('On-chain query failed:', error);
       }
     }
 
-    // Fallback to demo data
-    return {
-      contractAddress,
-      state: EscrowState.Draft,
-      invoice: {
-        id: 'INV-001',
-        description: 'Demo invoice',
-        amount: 1000,
-        issuerAddress: 'account-hash-issuer',
-        payerAddress: 'account-hash-payer',
-        createdAt: new Date().toISOString(),
-      },
-      balance: 0,
-    };
+    // Escrow not found
+    return null;
   }
 
   /**
    * Accept escrow (demo mode)
+   * Transitions: Draft -> Accepted
    */
   async acceptEscrow(
     contractAddress: string,
     payerKey: string
   ): Promise<{ deployHash: string }> {
     console.log('Accepting escrow:', contractAddress);
+
+    const escrow = demoEscrowStore.get(contractAddress);
+    if (escrow) {
+      if (escrow.state !== EscrowState.Draft) {
+        throw new Error(`Cannot accept escrow in state: ${escrow.state}`);
+      }
+      escrow.state = EscrowState.Accepted;
+      demoEscrowStore.set(contractAddress, escrow);
+      console.log('Escrow accepted, new state:', escrow.state);
+    }
+
     return { deployHash: `deploy-accept-${Date.now()}` };
   }
 
   /**
    * Fund escrow (demo mode)
+   * Transitions: Accepted -> Funded
    */
   async fundEscrow(
     contractAddress: string,
@@ -129,33 +202,71 @@ export class CasperService {
     payerKey: string
   ): Promise<{ deployHash: string }> {
     console.log('Funding escrow:', contractAddress, amount);
+
+    const escrow = demoEscrowStore.get(contractAddress);
+    if (escrow) {
+      if (escrow.state !== EscrowState.Accepted) {
+        throw new Error(`Cannot fund escrow in state: ${escrow.state}`);
+      }
+      escrow.state = EscrowState.Funded;
+      escrow.balance = amount;
+      demoEscrowStore.set(contractAddress, escrow);
+      console.log('Escrow funded, balance:', escrow.balance);
+    }
+
     return { deployHash: `deploy-fund-${Date.now()}` };
   }
 
   /**
    * Release escrow (demo mode)
+   * Transitions: Funded -> Released
    */
   async releaseEscrow(
     contractAddress: string,
     payerKey: string
   ): Promise<{ deployHash: string }> {
     console.log('Releasing escrow:', contractAddress);
+
+    const escrow = demoEscrowStore.get(contractAddress);
+    if (escrow) {
+      if (escrow.state !== EscrowState.Funded) {
+        throw new Error(`Cannot release escrow in state: ${escrow.state}`);
+      }
+      escrow.state = EscrowState.Released;
+      escrow.balance = 0;
+      demoEscrowStore.set(contractAddress, escrow);
+      console.log('Escrow released');
+    }
+
     return { deployHash: `deploy-release-${Date.now()}` };
   }
 
   /**
    * Cancel escrow (demo mode)
+   * Transitions: Draft|Accepted -> Cancelled
    */
   async cancelEscrow(
     contractAddress: string,
     callerKey: string
   ): Promise<{ deployHash: string }> {
     console.log('Cancelling escrow:', contractAddress);
+
+    const escrow = demoEscrowStore.get(contractAddress);
+    if (escrow) {
+      if (escrow.state !== EscrowState.Draft && escrow.state !== EscrowState.Accepted) {
+        throw new Error(`Cannot cancel escrow in state: ${escrow.state}`);
+      }
+      escrow.state = EscrowState.Cancelled;
+      demoEscrowStore.set(contractAddress, escrow);
+      console.log('Escrow cancelled');
+    }
+
     return { deployHash: `deploy-cancel-${Date.now()}` };
   }
 
   /**
    * Dispute escrow (demo mode)
+   * Transitions: Funded -> Disputed
    */
   async disputeEscrow(
     contractAddress: string,
@@ -163,11 +274,24 @@ export class CasperService {
     callerKey: string
   ): Promise<{ deployHash: string }> {
     console.log('Disputing escrow:', contractAddress, reason);
+
+    const escrow = demoEscrowStore.get(contractAddress);
+    if (escrow) {
+      if (escrow.state !== EscrowState.Funded) {
+        throw new Error(`Cannot dispute escrow in state: ${escrow.state}`);
+      }
+      escrow.state = EscrowState.Disputed;
+      escrow.disputeReason = reason;
+      demoEscrowStore.set(contractAddress, escrow);
+      console.log('Escrow disputed, reason:', reason);
+    }
+
     return { deployHash: `deploy-dispute-${Date.now()}` };
   }
 
   /**
    * Resolve dispute (demo mode)
+   * Transitions: Disputed -> Released (if releaseToReceiver) or Cancelled (refund)
    */
   async resolveDispute(
     contractAddress: string,
@@ -175,6 +299,18 @@ export class CasperService {
     arbiterKey: string
   ): Promise<{ deployHash: string }> {
     console.log('Resolving dispute:', contractAddress, releaseToReceiver);
+
+    const escrow = demoEscrowStore.get(contractAddress);
+    if (escrow) {
+      if (escrow.state !== EscrowState.Disputed) {
+        throw new Error(`Cannot resolve escrow in state: ${escrow.state}`);
+      }
+      escrow.state = releaseToReceiver ? EscrowState.Released : EscrowState.Cancelled;
+      escrow.balance = 0;
+      demoEscrowStore.set(contractAddress, escrow);
+      console.log('Dispute resolved, new state:', escrow.state);
+    }
+
     return { deployHash: `deploy-resolve-${Date.now()}` };
   }
 
