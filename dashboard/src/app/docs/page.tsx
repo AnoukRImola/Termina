@@ -22,7 +22,7 @@ export default function DocsIntroduction() {
 
       {/* What is this */}
       <div className="not-prose mb-10 p-6 bg-gradient-to-r from-[var(--casper-dark)] to-[var(--casper-dark-light)] rounded-xl">
-        <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
+        <h3 className="!text-white font-semibold mb-3 flex items-center gap-2">
           <Boxes className="w-5 h-5 text-[var(--casper-red)]" />
           What is Programmable Escrow Infrastructure?
         </h3>
@@ -90,7 +90,7 @@ export default function DocsIntroduction() {
           className="group p-6 bg-[var(--casper-dark)] rounded-xl border border-transparent hover:bg-[var(--casper-dark-light)] transition-colors"
         >
           <ArrowRight className="w-8 h-8 text-[var(--casper-red)] mb-3" />
-          <h3 className="font-semibold text-white mb-1">
+          <h3 className="!font-semibold !text-white mb-1">
             Try it Live
           </h3>
           <p className="text-sm text-[var(--muted)]">

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 
 export function Navbar() {
@@ -12,11 +13,13 @@ export function Navbar() {
       <div className="h-full max-w-screen-2xl mx-auto px-6 flex items-center justify-between">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-[var(--casper-red)] rounded-lg flex items-center justify-center">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-            </svg>
-          </div>
+          <Image
+            src="/logo.png"
+            alt="Términa Logo"
+            width={32}
+            height={32}
+            className="w-8 h-8"
+          />
           <span className="text-xl font-bold text-[var(--casper-dark)]">
             Términa
           </span>

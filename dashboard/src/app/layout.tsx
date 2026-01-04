@@ -13,6 +13,10 @@ export const metadata: Metadata = {
   title: "Términa Escrow - Trustless B2B Payments on Casper",
   description: "A decentralized escrow infrastructure for secure B2B payments on the Casper blockchain. Create trustless invoices with automated payment holds and dispute resolution.",
   keywords: ["casper", "blockchain", "escrow", "b2b", "payments", "smart contract"],
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({

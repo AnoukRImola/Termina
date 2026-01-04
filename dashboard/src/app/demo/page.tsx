@@ -300,52 +300,50 @@ export default function DemoPage() {
                 </p>
               </div>
 
-              <div className="space-y-3 mb-6">
+              <div className="space-y-2 mb-6">
                 {transactions.map((tx, i) => (
                   <div
                     key={i}
-                    className="flex items-center gap-3 p-4 bg-[var(--background-secondary)] rounded-lg"
+                    className="flex items-center gap-3 p-3 bg-[var(--background-secondary)] rounded-lg"
                   >
                     <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-[var(--casper-dark)]">{tx.step}</p>
-                      <p className="text-xs text-[var(--muted)] truncate">
-                        {tx.deployHash}
-                      </p>
-                    </div>
-                    <a
-                      href={`https://testnet.cspr.live/deploy/${tx.deployHash}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-sm text-[var(--casper-red)] hover:underline flex-shrink-0"
-                    >
-                      View
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
+                    <span className="font-medium text-[var(--casper-dark)]">{tx.step}</span>
                   </div>
                 ))}
               </div>
+
+              {/* Transaction Hash */}
+              {transactions.length > 0 && (
+                <div className="mb-6 p-4 bg-[var(--background-secondary)] border border-[var(--border)] rounded-lg">
+                  <p className="text-xs text-[var(--muted)] mb-1">Transaction Hash</p>
+                  <code className="text-sm text-[var(--casper-dark)] font-mono break-all">
+                    {transactions[0]?.deployHash}
+                  </code>
+                </div>
+              )}
 
               <div className="flex gap-3">
                 <button
                   onClick={() => {
                     setCurrentStep('create');
                     setTransactions([]);
-                    setInvoiceData({ description: '', amount: '10' });
+                    setInvoiceData({ description: '', amount: '3' });
                   }}
                   className="flex-1 px-6 py-3 border border-[var(--border)] text-[var(--casper-dark)] rounded-lg font-medium hover:bg-[var(--background-secondary)] transition-colors"
                 >
                   Create Another
                 </button>
-                <a
-                  href="https://testnet.cspr.live"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-[var(--casper-dark)] text-white rounded-lg font-medium hover:bg-[var(--casper-dark-light)] transition-colors"
-                >
-                  Explorer
-                  <ExternalLink className="w-4 h-4" />
-                </a>
+                {transactions.length > 0 && (
+                  <a
+                    href={`https://testnet.cspr.live/deploy/${transactions[0]?.deployHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-[var(--casper-red)] text-white rounded-lg font-medium hover:bg-[var(--casper-red-dark)] transition-colors"
+                  >
+                    Explorer
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                )}
               </div>
             </div>
           )}
