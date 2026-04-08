@@ -8,14 +8,6 @@
   <strong>Programmable Escrow Infrastructure for Enterprise Financial Workflows</strong>
 </p>
 
-<p align="center">
-  <a href="https://testnet.cspr.live/deploy/86d45c8af4cf8965de7dc208cfad1d4169b88d10d05a7f6002449c4452e9de22">
-    <img src="https://img.shields.io/badge/Casper-Testnet-red" alt="Casper Testnet">
-  </a>
-  <img src="https://img.shields.io/badge/Rust-Native%20Contract-orange" alt="Rust">
-  <img src="https://img.shields.io/badge/Next.js-16.1-black" alt="Next.js">
-  <img src="https://img.shields.io/badge/React-19-blue" alt="React">
-</p>
 
 ---
 
